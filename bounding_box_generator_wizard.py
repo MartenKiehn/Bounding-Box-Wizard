@@ -140,10 +140,10 @@ def get_bounding_box_from_json(json_path):
     Parameters:
     json_path (str): The path to the JSON file.
 
-    Returns:
-    list: A list of bounding boxes. Each bounding box is a list in the format [x_center, y_center, box_width, box_height, 0.0, 0].
+    Returns: list: A list of bounding boxes. Each bounding box is a list in the format [x_center, y_center,
+    box_width, box_height, 0.0, 0].
     """
-    with open(json_path, 'r') as f:
+    with open(json_path, 'r',encoding='utf-8') as f:
         data = json.load(f)
 
     bounding_boxes = []
@@ -200,7 +200,7 @@ def save_json_file(image_folder, output_folder, bounding_box, json_path, next_js
     if not os.path.exists(json_path):
         json_path = os.path.join(output_folder, json_path.replace(image_folder + '/', ''))
 
-    with open(json_path, 'r') as f:
+    with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     new_json = data.copy()
 
@@ -209,12 +209,16 @@ def save_json_file(image_folder, output_folder, bounding_box, json_path, next_js
     new_json['imagePath'] = next_json_path.replace('.json', '.jpeg').replace(image_folder + '/', '')
     output_path = os.path.join(output_folder, next_json_path.replace(image_folder + '/', ''))
     new_json = convert_int64_values(new_json)
-    with open(output_path, 'w') as new_file:
+    with open(output_path, 'w', encoding='utf-8') as new_file:
         json.dump(new_json, new_file)
 
 
-def sam_bounding_boxes_predictor(image_path, next_image_path, sam_predictor, mask_generator, image_folder,
+def sam_bounding_boxes_predictor(image_path, next_image_path, sam_predictor, image_folder,
                                  output_folder):
+    """
+    This function predicts the bounding box for the next image using the SAM model. It uses the bounding box of
+    the current image to predict the bounding box of the next image.
+    """
     json_path = get_corresponding_json_path_from_image(image_path)
     if not os.path.exists(json_path):
         json_path = os.path.join(output_folder, json_path.replace(image_folder + '/', ''))
@@ -240,8 +244,6 @@ def sam_bounding_boxes_predictor(image_path, next_image_path, sam_predictor, mas
             mask = masks[1]
 
             calculated_bounding_box = bounding_box_from_sam_segmentation(mask)
-
-            segmented_image = draw_mask(image, mask)
 
             sam_predictor.set_image(next_image)
             _, _, input_masks = sam_predictor.predict(box=bounding_box, multimask_output=True)
@@ -311,15 +313,17 @@ def convert_int64_values(obj):
     """
     if isinstance(obj, dict):
         return {k: convert_int64_values(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [convert_int64_values(elem) for elem in obj]
-    elif isinstance(obj, np.int64):
+    if isinstance(obj, np.int64):
         return int(obj)
-    else:
-        return obj
+    return obj
 
 
 def main(image_folder, output_folder):
+    """
+    This function is the main function of the bounding box generator wizard.
+    """
     tqdm.write(
         f'The Wizard is running on __|{DEVICE}|__ with model __|{MODEL_TYPE}|__ and checkpoint {CHECKPOINT_PATH}.')
     # check if output folder exists
@@ -327,8 +331,9 @@ def main(image_folder, output_folder):
         os.makedirs(output_folder)
         print(f'Created output folder {output_folder}')
     # load sam predictor
-    sam_predictor, mask_generator = load_sampler_predictor()
-    images_path = sorted(load_images_path_from_folder(image_folder), key=lambda f: int(''.join(filter(str.isdigit, f))))
+    sam_predictor, _ = load_sampler_predictor()
+    images_path = sorted(load_images_path_from_folder(image_folder),
+                         key=lambda f_1: int(''.join(filter(str.isdigit, f_1))))
     # use SAM on the images
     for image_path in tqdm(images_path, desc='Processing images'):
         image_path = os.path.join(image_folder, image_path)
@@ -342,13 +347,13 @@ def main(image_folder, output_folder):
         # check if next_json_path already exists and if so, skip
         if os.path.exists(next_json_path):
             # copy the file into the output folder
-            with open(next_json_path, 'r') as f:
+            with open(next_json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             output_path = os.path.join(output_folder, next_json_path.replace(image_folder + '/', ''))
-            with open(output_path, 'w') as new_file:
+            with open(output_path, 'w', encoding='utf-8') as new_file:
                 json.dump(data, new_file)
             continue
-        bounding_box = sam_bounding_boxes_predictor(image_path, next_image_path, sam_predictor, mask_generator,
+        bounding_box = sam_bounding_boxes_predictor(image_path, next_image_path, sam_predictor,
                                                     image_folder, output_folder)
         if bounding_box is not None:
             save_json_file(image_folder, output_folder, bounding_box, json_path, next_json_path)
